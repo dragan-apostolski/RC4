@@ -103,12 +103,11 @@ def encrypt(plain_text, key_stream, offset):
     return cipher_text
 
 
-def decrypt(ciphered_text, key, offset):
+def decrypt(ciphered_text, key):
     """Примитивата decrypt служи за дешифрирање на шифрираниот текст ciphered_text со клуч key.
 
     :param ciphered_text шифрираниот текст во форма на bytes објект
     :param key клучот за дешифрирање
-    :param offset
     :return дешифриран текст во форма на bytes објект
     """
     original = bytearray(ciphered_text)
