@@ -1,27 +1,3 @@
-"""
-Автор: Драган Апостолски
-
-Користење:
-
-За генерирање на клуч од b бајти и иницијален клуч k, се повикува функцијата generate_key_stream(k, b). k мора да биде
-во bytes објект. Пример:
-
-    key = b'0102030405'
-    key_len = 40
-    key = generate_key_stream(init_key, key_len)
-
-По генерирање на клуч, може да се шифрира текст со истиот клуч. Текст што ќе се шифрира исто така мора да биде во bytes
-објект. За шифрирање на текст plain_text со клуч key, се повикува функцијата encrypt(plain_text, key). Пример:
-
-    plain_text = b'00000000000000000000000000000000'
-    cipher_text = encrypt(plain_text, key)
-
-Шифрираниот текст во cipher_text е исто така во форма на bytes објект. Истиот текст, со истиот клуч може да се дешифрира
-со повик до функцијата decrypt на следниов начин:
-57 49 41 33 25 17 9 1
-    original_text = decrypt(cipher_text, key)
-"""
-
 
 class StateVector:
     """Оваа класа го опишува векторот на состојба - s, кој во секое време содржи пермутација на сите 8-битни броеви во
@@ -56,24 +32,18 @@ class StateVector:
         return self.s[item]
 
 
-def print_ks_arr(ks_arr):
-    for c in ks_arr:
-        print('{:02x} '.format(c), end="")
-    print()
-
-
-def generate_key_stream(initial_key, offset=0, length=16):
-    """Оваа функција генерира клуч со должина length, врз основа на иницијалниот клуч initial_key. Прво се иницијализира
+def generate_key_stream(key, offset=0, length=16):
+    """Оваа функција генерира keystream со должина length, врз основа на иницијалниот клуч key. Прво се иницијализира
     објект од класата StateVector, кој што ќе биде енкапсулација на векторот на состојба s. Вредностите (бајтите) за
-    клучот се случајно избрани вредности од векторот на состојба, а по секоја избрана вредност за клучот се врши нова
-    пермутација на s со повик на функцијата swap
+    keystream-от се случајно избрани вредности од векторот на состојба, а по секоја избрана вредност за клучот се врши
+    нова пермутација на s со повик на функцијата swap
 
-    :param initial_key: bytes објект кој ги содржи бајтите на иницијалниот клуч
+    :param key: низа од бајти со вредностите на клучот
     :param offset: после која позиција да почнат да се користат бајтите на клучот
     :param length: должина на клучот
-    :return низа со должина length, која ги содржи вредностите на клучот во форма на броеви од опсегот [0 - 255]
+    :return генератор објект кој ги содржи вредностите на keystream-от во форма на цели броеви од опсегот [0 - 255]
     """
-    state_vector = StateVector(initial_key)
+    state_vector = StateVector(key)
     i = j = 0
     count = 0
     while count < length + offset:
@@ -85,34 +55,60 @@ def generate_key_stream(initial_key, offset=0, length=16):
         count += 1
 
 
-def encrypt(plain_text, key_stream, offset):
+def encrypt(plain_text, key, offset=0):
     """Примитивата encrypt служи за енкриптирање на текстот даден во plain_text со клуч key.
-     Клучот треба да биде генериран со помош на функцијата generate_key_stream.
 
-     :param plain_text текстот (во bytes објект) што треба да биде шифриран
-     :param key_stream клучот кој ќе се употреби во шифрирањето
-     :param offset од која позиција на key stream-от да почнат да се користат бајтите
-     :return bytes објект кој го содржи шифрираниот текст
-     """
-    for i in range(offset):
-        key_stream.__next__()
-    cipher_text = ""
+    :param plain_text: bytes објект од карактерите на оригиналниот текст
+    :param key: хексадецимален стринг кој претставува клуч за шифрирањето
+    :param offset: после која позиција да почнат да се користат бајтите на клучот
+    :return хексадецимален стринг кој претставува шифриран текст со клуч key
+    """
+    cipher_text = ''
+    key_stream = generate_key_stream(bytearray.fromhex(key), offset, len(plain_text))
     for c in plain_text:
-        letter = ("%02X" % (c ^ key_stream.__next__()))
+        letter = ("%02X" % (c ^ next(key_stream)))
         cipher_text += letter
     return cipher_text
 
 
-def decrypt(ciphered_text, key):
+def decrypt(ciphered_text, key, offset=0):
     """Примитивата decrypt служи за дешифрирање на шифрираниот текст ciphered_text со клуч key.
 
-    :param ciphered_text шифрираниот текст во форма на bytes објект
-    :param key клучот за дешифрирање
+    :param ciphered_text: хексадецимален стринг, вратен од повик на функцијата encrypt со клуч key и офсет offset
+    :param key: клучот за дешифрирање на пораката
+    :param offset: после која позиција да почнат да се користат бајтите на клучот
     :return дешифриран текст во форма на bytes објект
     """
-    original = bytearray(ciphered_text)
-    key_len = len(key)
+    original = ''
+    ciphered_text = bytearray.fromhex(ciphered_text)
+    key_stream = generate_key_stream(bytearray.fromhex(key), offset, len(ciphered_text))
     for i in range(len(ciphered_text)):
-        dec = ((ciphered_text[i] - key[i % key_len]) % 256)
-        original[i] = dec
-    return bytes(original)
+        original += chr(ciphered_text[i] ^ next(key_stream))
+    return bytes(original.encode('utf-8'))
+
+
+def print_key_stream_in_hex(ks_arr):
+    for c in ks_arr:
+        print('{:02x} '.format(c), end="")
+    print()
+
+
+def process_test_vector(test_vector):
+    offsets = [0, 16, 240, 256, 496, 512, 752, 768, 1008, 1024, 1520, 1536, 2032, 2048, 3056, 3072, 4080, 4096]
+    print("Key: 0x{:<64}\tLength in bits: {:<3}".format(test_vector, int(len(test_vector)/2 * 8)))
+    for offset in offsets:
+        key_stream = generate_key_stream(bytearray.fromhex(test_vector), offset)
+        print('Offset={:<22}\tKey stream:'.format(offset), end='\t')
+        print_key_stream_in_hex(list(key_stream))
+    print()
+
+
+def main():
+    with open('test_vectors') as f:
+        lines = f.readlines()
+    for line in lines:
+        process_test_vector(line[0:len(line)-1])
+
+
+if __name__ == '__main__':
+    main()
